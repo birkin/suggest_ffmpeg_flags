@@ -1,4 +1,4 @@
-## inspects a video file with ffprobe, suggests preservation ffmpeg flags
+## inspects a video file with ffprobe, suggests preservation ffmpeg flags for video and audio
 import json
 import subprocess
 from pathlib import Path
@@ -22,10 +22,12 @@ def run_ffprobe(file_path: str | Path) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
-def parse_video_stream(streams: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
-    """Returns the first video stream from the streams list."""
+def parse_stream_by_type(
+    streams: list[dict[str, Any]], stream_type: str
+) -> Optional[dict[str, Any]]:
+    """Returns the first stream of a given type (e.g., "video" or "audio") from the streams list."""
     for stream in streams:
-        if stream.get("codec_type") == "video":
+        if stream.get("codec_type") == stream_type:
             return stream
     return None
 
@@ -47,25 +49,38 @@ def suggest_ffmpeg_flags(file_path: str | Path) -> None:
     """Inspects the video file and prints recommended ffmpeg flags for preservation."""
     info: dict[str, Any] = run_ffprobe(file_path)
     streams: list[dict[str, Any]] = info.get("streams", [])
-    video_stream: Optional[dict[str, Any]] = parse_video_stream(streams)
-    if not video_stream:
-        print("No video stream found.")
-        return
 
-    pix_fmt: str = video_stream.get("pix_fmt", "unknown")
-    bits_per_raw_sample: str = video_stream.get("bits_per_raw_sample", "unknown")
-    color: str = "YUV" if "yuv" in pix_fmt else "RGB" if "rgb" in pix_fmt else "Unknown"
-    chroma: str = infer_chroma_from_pix_fmt(pix_fmt)
+    video_stream: Optional[dict[str, Any]] = parse_stream_by_type(streams, "video")
+    audio_stream: Optional[dict[str, Any]] = parse_stream_by_type(streams, "audio")
 
     print(f"Input file: {file_path}")
-    print(f"  Pixel format (pix_fmt):      {pix_fmt}")
-    print(f"  Color model:                {color}")
-    print(f"  Bits per channel:           {bits_per_raw_sample}")
-    print(f"  Chroma subsampling:         {chroma}")
+
+    if video_stream:
+        pix_fmt: str = video_stream.get("pix_fmt", "unknown")
+        bits_per_raw_sample: str = video_stream.get("bits_per_raw_sample", "unknown")
+        color: str = (
+            "YUV" if "yuv" in pix_fmt else "RGB" if "rgb" in pix_fmt else "Unknown"
+        )
+        chroma: str = infer_chroma_from_pix_fmt(pix_fmt)
+
+        print("--- Video Stream ---")
+        print(f"  Pixel format (pix_fmt):      {pix_fmt}")
+        print(f"  Color model:                {color}")
+        print(f"  Bits per channel:           {bits_per_raw_sample}")
+        print(f"  Chroma subsampling:         {chroma}")
+        print(f"  Recommended ffmpeg flag:    -pix_fmt {pix_fmt}")
+    else:
+        print("No video stream found.")
+
     print()
-    print("Recommended ffmpeg flags:")
-    print(f"  -pix_fmt {pix_fmt}")
-    # Optionally recommend audio flags if desired, based on additional stream info
+
+    if audio_stream:
+        sample_rate: str = audio_stream.get("sample_rate", "unknown")
+        print("--- Audio Stream ---")
+        print(f"  Sample rate:                {sample_rate}")
+        print(f"  Recommended ffmpeg flag:    -ar {sample_rate}")
+    else:
+        print("No audio stream found.")
 
 
 if __name__ == "__main__":
