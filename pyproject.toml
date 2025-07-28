@@ -1,0 +1,9 @@
+[project]
+name = "suggest-ffmpeg-flags"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [ 
+    "textual~=5.0.0", 
+    "textual-dev~=1.7.0" ]
